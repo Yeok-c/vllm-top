@@ -1,0 +1,35 @@
+[build-system]
+requires = ["setuptools>=42", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "vllm-top"
+version = "0.1.1"
+description = "A monitoring tool for vLLM metrics."
+authors = [
+    { name = "Yeok Tatt Cheah", email = "yeokch@gmail.com" }
+]
+license = { text = "MIT" }
+readme = "README.md"
+keywords = ["vllm", "monitoring", "metrics"]
+classifiers = [
+    "Programming Language :: Python :: 3",
+    "Operating System :: OS Independent",
+]
+dependencies = [
+    "requests",
+    "prometheus_client",
+]
+requires-python = ">=3.6"
+
+[project.urls]
+"Homepage" = "https://github.com/yeok-c/vllm-top"
+"Documentation" = "https://github.com/yeok-c/vllm-top#readme"
+"Repository" = "https://github.com/yeok-c/vllm-top"
+"Issues" = "https://github.com/yeok-c/vllm-top/issues"
+
+[project.scripts]
+vllm-top = "vllm_top.main:main"
+
+[tool.setuptools.packages.find]
+where = ["src"]

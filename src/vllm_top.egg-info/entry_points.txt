@@ -1,0 +1,2 @@
+[console_scripts]
+vllm-top = vllm_top.main:main
