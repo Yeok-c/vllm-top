@@ -1,47 +1,67 @@
 # vllm-top
 
-vllm-top is a Python package designed for monitoring and displaying metrics from the vLLM (Variable-length Language Model) service. It provides a comprehensive dashboard that visualizes the current state and historical performance of the service, making it easier to track its behavior and performance over time.
+[![PyPI version](https://img.shields.io/pypi/v/vllm-top.svg)](https://pypi.org/project/vllm-top/)
 
-## Features
+<p align="center">
+  <img src="demo/demo.gif" alt="Demo" width="600"/>
+</p>
 
-- Fetches and parses metrics from the vLLM service.
-- Displays real-time metrics in a terminal dashboard.
-- Supports background monitoring at a configurable frequency.
-- Visualizes historical data with bar charts and sparklines.
-- Provides cumulative statistics for prompt and generation tokens.
+**vllm-top** is a Python package for monitoring and displaying metrics from the [vLLM](https://github.com/vllm-project/vllm) service. It provides a comprehensive dashboard to visualize both current state and historical performance, making it easy to track and analyze service behavior over time.
 
-## Installation
+---
 
-To install the package, you can use pip:
+## 🚀 Features
+
+- **Task State Visibility:** Instantly see GPU Cache Usage, Running and Waiting requests to help debug bottlenecks and improve throughput.
+- **Minimalist Monitoring:** Lightweight dashboard that parses metrics directly from Prometheus.
+- **Quick Setup:** No extra configuration — just pip install and run.
+
+---
+
+## 📦 Installation
+
+Install via pip:
 
 ```bash
 pip install vllm-top
 ```
 
-## Usage
+---
 
-To run the monitoring functionality, you can execute the following command:
+## 🛠️ Usage
 
-```bash
-python -m vllm_top.main --monitor [INTERVAL]
-```
-
-Replace `[INTERVAL]` with the desired refresh interval in seconds (default is 2 seconds).
-
-For a one-time snapshot of the metrics, run:
+Start monitoring:
 
 ```bash
-python -m vllm_top.main
+vllm-top
 ```
 
-## Contributing
+Change update interval (in seconds):
 
-Contributions are welcome! Please feel free to submit a pull request or open an issue for any enhancements or bug fixes.
+```bash
+vllm-top --interval 5
+```
 
-## License
+Get a one-time snapshot:
 
-This project is licensed under the MIT License. See the LICENSE file for more details.
+```bash
+vllm-top --snapshot
+```
 
-## Changelog
+---
 
-For a detailed list of changes and updates, please refer to the CHANGELOG.md file.
+## 🤝 Contributing
+
+Contributions are welcome! Please submit a pull request or open an issue for enhancements or bug fixes.
+
+---
+
+## 📄 License
+
+Licensed under the MIT License. See the [LICENSE](LICENSE) file for details.
+
+---
+
+## 📜 Changelog
+
+See [CHANGELOG.md](CHANGELOG.md) for a detailed

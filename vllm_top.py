@@ -243,6 +243,16 @@ def parse_vllm_metrics_once():
     
     monitor.update_history(grouped_metrics)
     monitor.display_metrics(grouped_metrics)
+    
+    # # pretty print grouped_metrics
+    # print("\n\n📊 Grouped Metrics:")
+    # for key, values in grouped_metrics.items():
+    #     print(f"{key}:")
+    #     for value in values:
+    #         labels = ', '.join(f"{k}={v}" for k, v in value['labels'].items())
+    #         print(f"  name: {value['name']} = vallue: {value['value']} labels: ({labels})")
+    
+    print("\nMetrics snapshot complete.")
 
 if __name__ == "__main__":
     if len(sys.argv) > 1 and sys.argv[1] == "--monitor":

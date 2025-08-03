@@ -33,7 +33,7 @@ def main():
         parse_vllm_metrics_once()
     else:
         # Continuous monitoring mode
-        interval = int(sys.argv[2]) if len(sys.argv) > 2 else 2
+        interval = int(sys.argv[2]) if len(sys.argv) > 2 else 0.1
         monitor = VLLM_TOP()
         monitor.run_monitor(interval)
 
