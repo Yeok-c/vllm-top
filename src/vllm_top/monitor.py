@@ -6,10 +6,13 @@ import os
 import threading
 
 class VLLM_TOP:
-    def __init__(self, history_size=50, max_running=255, max_waiting=1000):
+    def __init__(self, history_size=50, max_running=255, max_waiting=1000, metrics_url="http://0.0.0.0:8000/metrics", verify_ssl=True):
+        self.metrics_url = metrics_url
+        self.verify_ssl = verify_ssl
         self.history_size = history_size
         self.max_running = max_running
         self.max_waiting = max_waiting
+        
         self.running_history = deque(maxlen=history_size)
         self.waiting_history = deque(maxlen=history_size)
         self.cache_usage_history = deque(maxlen=history_size)
@@ -48,7 +51,7 @@ class VLLM_TOP:
             if max_val == min_val:
                 spark_rows = [("▄" * width) for _ in range(3)]
             else:
-                blocks = ["▁", "▂", "▃", "▄", "▅", "▆", "▇", "█"]
+                blocks = [" ", "▂", "▃", "▄", "▅", "▆", "▇", "█"]
                 levels = 24  # 8 per row, 3 rows
                 data_width = min(len(data), width)
                 col_levels = []
@@ -93,7 +96,7 @@ class VLLM_TOP:
     def fetch_metrics(self):        
         """Fetch and parse vLLM metrics"""
         try:
-            metrics = requests.get("http://0.0.0.0:8000/metrics", timeout=5).text
+            metrics = requests.get(self.metrics_url, timeout=5, verify=self.verify_ssl).text
             grouped_metrics = defaultdict(list)
             
             for fam in text_string_to_metric_families(metrics):
@@ -163,7 +166,7 @@ class VLLM_TOP:
 
     def get_model_name(self, grouped_metrics):
         """Extract model name from metrics labels"""
-        # Try to find model_name from any metric that has it
+        # Try to find model_name from any metric that that has it
         for metric_list in grouped_metrics.values():
             for sample in metric_list:
                 labels = sample.get('labels', {})
@@ -270,7 +273,3 @@ class VLLM_TOP:
             print("\n\nStopping background monitoring...")
             self.is_monitoring = False
             print("Monitoring stopped.")
-
-
-# Legacy alias for backward compatibility
-VLLMMetricsMonitor = VLLM_TOP

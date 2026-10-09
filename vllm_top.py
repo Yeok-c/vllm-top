@@ -3,12 +3,14 @@ import requests
 from collections import defaultdict, deque
 import time
 import os
-import sys
 import threading
 
 class VLLMMetricsMonitor:
-    def __init__(self, history_size=50):
+    def __init__(self, history_size=50, max_running=255, max_waiting=1000, metrics_url="http://0.0.0.0:8000/metrics", verify_ssl=True):
+        self.metrics_url = metrics_url
+        self.verify_ssl = verify_ssl
         self.history_size = history_size
+        self.max_waiting = max_waiting
         self.running_history = deque(maxlen=history_size)
         self.waiting_history = deque(maxlen=history_size)
         self.cache_usage_history = deque(maxlen=history_size)
@@ -33,38 +35,66 @@ class VLLMMetricsMonitor:
         
         filled_width = int(percentage * width)
         bar = "█" * filled_width + "░" * (width - filled_width)
-        return f"{label:<25} |{bar}| {value:.1f}/{max_value:.1f} ({percentage*100:.4f}%)"
-       
-
-    def create_sparkline(self, data, width=60):
-        """Create a sparkline chart for historical data"""
+        return f"{label:<25} |{bar}| {value:.1f}/{max_value:.0f} ({percentage*100:.0f}%)"
+    parser.add_argument("--url", type=str, default="http://0.0.0.0:8000/metrics", help="vLLM metrics endpoint URL")
+    parser.add_argument("--insecure", action="store_true", help="Disable SSL certificate verification")
+    parser.add_argument("--monitor", action="store_true", help="Run in continuous monitoring mode")
+    parser.add_argument("--snapshot", action="store_true", help="One-time metrics snapshot")
         if not data or len(data) < 2:
-            return "░" * width
-        
-        min_val = min(data)
-        max_val = max(data)
-        
-        if max_val == min_val:
-            return "▄" * len(data)
-        
-        sparkline = ""
-        # Only create sparkline for actual data points, no padding
-        data_width = min(len(data), width)
-        
-        for i in range(data_width):
-            # Normalize value to 0-8 range for block characters
-            normalized = (data[i] - min_val) / (max_val - min_val)
-            block_height = int(normalized * 8)
-            
-            blocks = ["▁", "▂", "▃", "▄", "▅", "▆", "▇", "█"]
-            sparkline += blocks[min(block_height, 7)]
-        
-        return sparkline
+            spark_rows = [("░" * width) for _ in range(3)]
+        else:
+    if args.monitor:
+        monitor = VLLMMetricsMonitor(metrics_url=args.url, verify_ssl=not args.insecure)
+        monitor.run_monitor()
+    elif args.snapshot:
+        monitor = VLLMMetricsMonitor(metrics_url=args.url, verify_ssl=not args.insecure)
+            else:
+                blocks = [" ", "▂", "▃", "▄", "▅", "▆", "▇", "█"]
+                levels = 24  # 8 per row, 3 rows
+                data_width = min(len(data), width)
+                col_levels = []
+                for i in range(data_width):
+                    normalized = max(0, min(1, (data[i] - min_val) / (max_val - min_val)))
+                    col_levels.append(int(normalized * (levels - 1)))
+
+                # Fill from bottom up: if a column's level is high, fill all lower rows too
+                spark_rows = []
+                for row in range(3):
+                    line = ""
+                    base = (2 - row) * 8
+                    for lvl in col_levels:
+                        if lvl >= base:
+                            # Pick the block for this row, or the highest if above
+                            block_idx = min(max(lvl - base, 0), 7)
+                            line += blocks[block_idx]
+                        else:
+                            line += " "
+                    spark_rows.append(line)
+
+        # Frame drawing
+        adjusted_width = int(width*0.845)
+        left_pad = " " * len(label_prefix)
+        top_border = left_pad + "┌" + ("─" * adjusted_width) + "┐"
+        bottom_border = left_pad + "└" + ("─" * adjusted_width) + "┘"
+        framed_rows = [top_border]
+        for r in spark_rows:
+            framed_rows.append(left_pad + "│" + r + "│")
+        framed_rows.append(bottom_border)
+
+        # Add min/max labels if provided
+        if label_min is not None or label_max is not None:
+            min_label = f"{label_min}" if label_min is not None else f"{fixed_min}"
+            max_label = f"{label_max}" if label_max is not None else f"{fixed_max}"
+            # Place max at top left, min at bottom left (after frame character and left_pad)
+            framed_rows[1] = f"{left_pad}│{max_label:<6}" + framed_rows[1][len(left_pad)+7:]
+            framed_rows[-2] = f"{left_pad}│{min_label:<6}" + framed_rows[-2][len(left_pad)+7:]
+
+        return "\n".join(framed_rows)
     
-    def fetch_metrics(self):
+    def fetch_metrics(self):        
         """Fetch and parse vLLM metrics"""
-        try:
-            metrics = requests.get("http://0.0.0.0:8000/metrics", timeout=5).text
+            metrics = requests.get(self.metrics_url, timeout=5, verify=self.verify_ssl).text
+            metrics = requests.get(self.metrics_url, timeout=5).text
             grouped_metrics = defaultdict(list)
             
             for fam in text_string_to_metric_families(metrics):
@@ -80,7 +110,7 @@ class VLLMMetricsMonitor:
         except Exception as e:
             print(f"Error fetching metrics: {e}")
             return None
-    
+            
     def background_monitor(self):
         """Continuously monitor metrics at 10Hz"""
         while self.is_monitoring:
@@ -131,45 +161,56 @@ class VLLMMetricsMonitor:
             self.cache_usage_history.append(cache_usage * 100)  # Convert to percentage for display
             self.timestamps.append(time.time())
     
+
+    def get_model_name(self, grouped_metrics):
+        """Extract model name from metrics labels"""
+        # Try to find model_name from any metric that that has it
+        for metric_list in grouped_metrics.values():
+            for sample in metric_list:
+                labels = sample.get('labels', {})
+                if 'model_name' in labels:
+                    return labels['model_name']
+        return "Unknown"
+
     def display_metrics(self, grouped_metrics):
         """Display comprehensive metrics dashboard"""
         self.clear_screen()
         
-        print("🚀 vLLM METRICS DASHBOARD")
+        # Show model name
+        model_name = self.get_model_name(grouped_metrics)
+        print(f"vLLM METRICS DASHBOARD - Model: {model_name}")
         print("=" * 80)
         
         # Current state metrics (averaged from background monitoring)
         if self.background_running:
             running, waiting, cache_usage = self.get_averaged_metrics()
             cache_usage_display = cache_usage * 100  # Convert for display
-            print("\n📊 CURRENT STATE (10Hz Averaged)")
+            print("\nCURRENT STATE")
         else:
             running = grouped_metrics.get('vllm:num_requests_running', [{}])[0].get('value', 0)
             waiting = grouped_metrics.get('vllm:num_requests_waiting', [{}])[0].get('value', 0)
             cache_usage = grouped_metrics.get('vllm:gpu_cache_usage_perc', [{}])[0].get('value', 0)
             cache_usage_display = cache_usage * 100
-            print("\n📊 CURRENT STATE")
+            print("\nCURRENT STATE")
         
         print("-" * 40)
-        max_queue = max(max(self.waiting_history) if self.waiting_history else [100], 100)
-        print(self.create_bar_chart(running, 10, label="Running Requests"))
-        print(self.create_bar_chart(waiting, max_queue, label="Waiting Requests"))
+        print(self.create_bar_chart(running, self.max_running, label="Running Requests"))
+        print(self.create_bar_chart(waiting, self.max_waiting, label="Waiting Requests"))
         print(self.create_bar_chart(cache_usage_display, 100, label="GPU Cache Usage (%)"))
         
-        # Rolling histograms
-        print("\n📈 ROLLING HISTORY (Last 50 measurements)")
+        # Rolling histograms with fixed scaling
+        print("\nROLLING HISTORY (Last 50 measurements)")
         print("-" * 60)
         
         if len(self.running_history) > 1:
-            print(f"Running:  {self.create_sparkline(list(self.running_history))}")
+            print(f"Running:  \n{self.create_sparkline(list(self.running_history), fixed_min=0, fixed_max=self.max_running)}")
             print(f"          Min: {min(self.running_history):.1f} | Max: {max(self.running_history):.1f} | Avg: {sum(self.running_history)/len(self.running_history):.1f}")
             
-            print(f"Waiting:  {self.create_sparkline(list(self.waiting_history))}")
+            print(f"Waiting:  \n{self.create_sparkline(list(self.waiting_history), fixed_min=0, fixed_max=self.max_waiting)}")
             print(f"          Min: {min(self.waiting_history):.1f} | Max: {max(self.waiting_history):.1f} | Avg: {sum(self.waiting_history)/len(self.waiting_history):.1f}")
             
-            print(f"Cache %:  {self.create_sparkline(list(self.cache_usage_history))}")
+            print(f"Cache %:  \n{self.create_sparkline(list(self.cache_usage_history), fixed_min=0, fixed_max=100)}")
             print(f"          Min: {min(self.cache_usage_history):.3f}% | Max: {max(self.cache_usage_history):.3f}% | Avg: {sum(self.cache_usage_history)/len(self.cache_usage_history):.3f}%")
-        
         # Cumulative statistics
         print("\n📋 CUMULATIVE STATISTICS")
         print("-" * 40)
@@ -201,7 +242,7 @@ class VLLMMetricsMonitor:
         print(f"\n⏰ Last updated: {time.strftime('%H:%M:%S')}")
         print("Press Ctrl+C to exit...")
 
-    def run_monitor(self, interval=2):
+    def run_monitor(self, interval=0.1):
         """Run continuous monitoring"""
         print("Starting vLLM metrics monitoring...")
         print(f"Display refresh interval: {interval} seconds")
@@ -230,36 +271,26 @@ class VLLMMetricsMonitor:
             print("\n\nStopping background monitoring...")
             self.is_monitoring = False
             print("Monitoring stopped.")
-            sys.exit(0)
-
-def parse_vllm_metrics_once():
-    """Original function for one-time metrics parsing"""
-    monitor = VLLMMetricsMonitor()
-    grouped_metrics = monitor.fetch_metrics()
-    
-    if not grouped_metrics:
-        print("Failed to fetch metrics")
-        return
-    
-    monitor.update_history(grouped_metrics)
-    monitor.display_metrics(grouped_metrics)
-    
-    # # pretty print grouped_metrics
-    # print("\n\n📊 Grouped Metrics:")
-    # for key, values in grouped_metrics.items():
-    #     print(f"{key}:")
-    #     for value in values:
-    #         labels = ', '.join(f"{k}={v}" for k, v in value['labels'].items())
-    #         print(f"  name: {value['name']} = vallue: {value['value']} labels: ({labels})")
-    
-    print("\nMetrics snapshot complete.")
 
 if __name__ == "__main__":
-    if len(sys.argv) > 1 and sys.argv[1] == "--monitor":
-        # Continuous monitoring mode
-        interval = int(sys.argv[2]) if len(sys.argv) > 2 else 2
-        monitor = VLLMMetricsMonitor()
-        monitor.run_monitor(interval)
+    import argparse
+    parser = argparse.ArgumentParser(description="vLLM Metrics Monitor")
+    parser.add_argument("--url", type=str, default="http://0.0.0.0:8000/metrics", help="vLLM metrics endpoint URL")
+    parser.add_argument("--monitor", action="store_true", help="Run in continuous monitoring mode")
+    parser.add_argument("--snapshot", action="store_true", help="One-time metrics snapshot")
+    
+    args = parser.parse_args()
+    
+    if args.monitor:
+        monitor = VLLMMetricsMonitor(metrics_url=args.url)
+        monitor.run_monitor()
+    elif args.snapshot:
+        monitor = VLLMMetricsMonitor(metrics_url=args.url)
+        grouped_metrics = monitor.fetch_metrics()
+        if grouped_metrics:
+            monitor.update_history(grouped_metrics)
+            monitor.display_metrics(grouped_metrics)
+        else:
+            print("Failed to fetch metrics")
     else:
-        # One-time snapshot
-        parse_vllm_metrics_once()
+        print("Please specify --monitor or --snapshot")

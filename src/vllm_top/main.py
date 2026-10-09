@@ -28,14 +28,31 @@ def parse_vllm_metrics_once():
 
 def main():
     """Main entry point for the vllm-top CLI"""
-    if len(sys.argv) > 1 and sys.argv[1] == "--snapshot":
+    import argparse
+    parser = argparse.ArgumentParser(description="vLLM Metrics Monitor")
+    parser.add_argument("--url", type=str, default="http://0.0.0.0:8000/metrics", help="vLLM metrics endpoint URL")
+    parser.add_argument("--insecure", action="store_true", help="Disable SSL certificate verification")
+    parser.add_argument("--snapshot", action="store_true", help="One-time metrics snapshot")
+    parser.add_argument("--interval", type=float, default=0.1, help="Refresh interval in seconds")
+    
+    # Handle positional arguments like the original code did (if any)
+    # The original code used sys.argv[1] == "--snapshot" and sys.argv[2] for interval.
+    # We'll transition to a proper parser but keep compatibility if possible.
+    args, unknown = parser.parse_known_args()
+
+    if args.snapshot:
         # One-time snapshot
-        parse_vllm_metrics_once()
+        monitor = VLLM_TOP(metrics_url=args.url, verify_ssl=not args.insecure)
+        grouped_metrics = monitor.fetch_metrics()
+        if grouped_metrics:
+            monitor.update_history(grouped_metrics)
+            monitor.display_metrics(grouped_metrics)
+        else:
+            print("Failed to fetch metrics")
     else:
         # Continuous monitoring mode
-        interval = int(sys.argv[2]) if len(sys.argv) > 2 else 0.1
-        monitor = VLLM_TOP()
-        monitor.run_monitor(interval)
+        monitor = VLLM_TOP(metrics_url=args.url, verify_ssl=not args.insecure)
+        monitor.run_monitor(args.interval)
 
 if __name__ == "__main__":
     main()
